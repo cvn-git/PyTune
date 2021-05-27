@@ -1,0 +1,6 @@
+numpy
+scipy
+soundfile
+pygame
+PySide2
+matplotlib
