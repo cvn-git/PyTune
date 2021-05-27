@@ -42,7 +42,7 @@ class AudioRecord:
             self._chunk_idx += 1
 
 
-class PyTuner(QMainWindow):
+class PyTune(QMainWindow):
     def __init__(self, *args, **kwargs):
         QMainWindow.__init__(self, *args, **kwargs)
 
@@ -204,12 +204,14 @@ class PyTuner(QMainWindow):
                             frequency=fs, audioformat=AUDIO_F32, numchannels=1, chunksize=chunk_size,
                             allowed_changes=AUDIO_ALLOW_FORMAT_CHANGE, callback=record.add_chunk)
 
+        self.busy('Recording')
         audio.pause(False)
         time.sleep(duration + 0.5)
         audio.close()
         assert record.completed(), 'Recording not completed'
 
         self.new_signal(record.audio_data())
+        self.not_busy()
 
     def button_save_clicked(self):
         if self.signal is None:
@@ -400,7 +402,7 @@ class PyTuner(QMainWindow):
         self.busy_cursor = cursor
         self.status_bar.showMessage(message)
         self.setCursor(cursor)
-        self.update()
+        QCoreApplication.processEvents()
 
 
 if __name__ == '__main__':
@@ -409,10 +411,10 @@ if __name__ == '__main__':
     # For QSettings
     QCoreApplication.setOrganizationName('CVN')
     QCoreApplication.setOrganizationDomain('github.com')
-    QCoreApplication.setApplicationName('PyTuner')
+    QCoreApplication.setApplicationName('PyTune')
 
-    my_app = PyTuner()
-    my_app.setWindowTitle('PyTuner')
+    my_app = PyTune()
+    my_app.setWindowTitle('PyTune')
     my_app.show()
     # my_app.resize(1600, 900)
     sys.exit(app.exec_())
