@@ -49,6 +49,9 @@ class PyTune(QMainWindow):
         self.busy_message = None
         self.busy_cursor = None
         self.signal = None
+        self.f_spec = None
+        self.t_spec = None
+        self.spec = None
         self.start_idx = None
         self.end_idx = None
         self.note_str = None
@@ -168,6 +171,7 @@ class PyTune(QMainWindow):
         self.axis_spectrum = axes[1]
         figure_waveform.subplots_adjust(left=0.1, right=0.95, bottom=0.1, top=0.95, wspace=0)
         self.canvas_waveform = FigureCanvas(figure_waveform)
+        self.canvas_waveform.mpl_connect('button_press_event', self.figure_clicked)
         self.canvas_waveform.draw()
         layout_waveform.addWidget(self.canvas_waveform)
         layout_waveform.addWidget(NavigationToolbar(self.canvas_waveform, self))
@@ -255,6 +259,34 @@ class PyTune(QMainWindow):
 
         self.new_signal(signal)
 
+    def figure_clicked(self, event):
+        if event.inaxes != self.axis_waveform:
+            return
+        if (event.button != 1) and (event.button != 3):
+            return
+
+        self.set_boundary(event.ydata, event.button == 1)
+
+    def set_boundary(self, t, is_start):
+        if self.signal is None:
+            return
+
+        fs = int(self.textbox_sample_rate.text())
+        idx = int(round(t * fs))
+        if is_start:
+            if idx >= self.end_idx:
+                return
+            self.start_idx = idx
+        else:
+            if idx <= self.start_idx:
+                return
+            self.end_idx = idx
+
+        self.clear_waveform()
+        self.clear_harmonics()
+        self.plot_waveform()
+        self.plot_harmonics()
+
     def new_signal(self, signal):
         signal = signal - np.mean(signal)
 
@@ -263,38 +295,41 @@ class PyTune(QMainWindow):
 
         # Raw spectrogram
         n_dft = 4096
-        f_spec, t_spec, spec = scipy.signal.spectrogram(signal, fs=fs, nperseg=n_dft, mode='psd')
+        self.f_spec, self.t_spec, self.spec = scipy.signal.spectrogram(signal, fs=fs, nperseg=n_dft, mode='psd')
 
         # Find peak frequency
-        peak_freq = f_spec[np.unravel_index(np.argmax(spec), spec.shape)[0]]
+        peak_freq = self.f_spec[np.unravel_index(np.argmax(self.spec), self.spec.shape)[0]]
         self.do_extraction(peak_freq)
         print(peak_freq)
         if self.checkbox_auto.checkState() == Qt.Checked:
             self.set_note(np.argmin(np.abs(peak_freq - self.note_freq)))
 
         # Plotting
-        time_span = np.arange(len(signal), dtype=float) / fs
+        self.plot_waveform()
+        self.plot_harmonics()
+
+    def plot_waveform(self):
+        fs = int(self.textbox_sample_rate.text())
+        time_span = np.arange(len(self.signal), dtype=float) / fs
         ax = self.axis_waveform
-        ax.plot(signal, time_span)
+        ax.plot(self.signal, time_span, 'g')
         x_lim = ax.get_xlim()
-        ax.plot(x_lim, time_span[self.start_idx] * np.ones(2))
-        ax.plot(x_lim, time_span[self.end_idx] * np.ones(2))
+        ax.plot(x_lim, time_span[self.start_idx] * np.ones(2), 'b')
+        ax.plot(x_lim, time_span[self.end_idx] * np.ones(2), 'r')
         ax.set_ylabel('Time [s]')
         ax.grid(True)
 
-        x, y = np.meshgrid(f_spec, t_spec)
-        im = 10 * np.log10(spec.T)
+        x, y = np.meshgrid(self.f_spec, self.t_spec)
+        im = 10 * np.log10(self.spec.T)
         min_val = np.amax(im) - 40.0
         im[im < min_val] = min_val
         ax = self.axis_spectrum
         ax.pcolor(x, y, im, shading='auto')
         ax.set_xlabel('Frequency [Hz]')
 
-        ax.set_ylim((t_spec[0], t_spec[-1]))
+        ax.set_ylim((self.t_spec[0], self.t_spec[-1]))
 
         self.canvas_waveform.draw()
-
-        self.plot_harmonics()
 
     def ref_freq_changed(self):
         self.compute_notes(float(self.textbox_ref_freq.text()))
